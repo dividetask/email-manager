@@ -2,7 +2,9 @@
 config.yml
 
 # Downloaded emails directory
-downloaded_emails/
+data/
+logs/
+Gemfile.lock
 
 *.gem
 *.rbc

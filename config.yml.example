@@ -1,16 +1,20 @@
-# Email Downloader Configuration
-# Copy this file to config.yml and fill in your credentials
+# Email Daemon Configuration
 
-server: imap.gmail.com
-port: 993
-username: your_email@gmail.com
-password: your_app_password_here
-ssl: true
+# Email server settings
+email:
+  host: imap.gmail.com              # Your IMAP server
+  port: 993
+  username: your-email@gmail.com     # YOUR EMAIL HERE
+  password: your-app-password        # YOUR PASSWORD HERE
+  ssl: true
+  mailbox: INBOX
 
-# Output settings
-output_dir: ./downloaded_emails
-database_path: ./emails.json
-mailbox: INBOX
+# Storage settings
+email_storage_dir: ./data/emails
+database_path: ./data/emails.json
 
-check_interval: 3600
+# Daemon settings
+check_interval: 3600  # Check every hour (in seconds)
+
+# Logging
 log_file: ./logs/email_daemon.log
