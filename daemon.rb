@@ -31,8 +31,12 @@ class EmailDaemon
 
   def stop
     @running = false
-    @logger.info "Email daemon stopping..."
-    @downloader.disconnect
+    puts "Email daemon stopping..." if @logger
+    begin
+      @downloader.disconnect
+    rescue
+      # Ignore errors during shutdown
+    end
   end
 
   def sync_emails
@@ -62,11 +66,14 @@ if __FILE__ == $0
   
   ['INT', 'TERM'].each do |signal|
     trap(signal) do
-      puts "\nReceived #{signal} signal, shutting down gracefully..."
-      daemon.stop
+      daemon.instance_variable_set(:@running, false)
+      puts "\nReceived #{signal} signal, shutting down gracefully... (press Ctrl+C again to force quit)"
       exit
     end
   end
-  
+
   daemon.start
+
+  # Clean disconnect after main loop exits
+  daemon.stop
 end
