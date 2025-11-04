@@ -1,0 +1,16 @@
+# Email Downloader Configuration
+# Copy this file to config.yml and fill in your credentials
+
+server: imap.gmail.com
+port: 993
+username: your_email@gmail.com
+password: your_app_password_here
+ssl: true
+
+# Output settings
+output_dir: ./downloaded_emails
+database_path: ./emails.json
+mailbox: INBOX
+
+check_interval: 3600
+log_file: ./logs/email_daemon.log

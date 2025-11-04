@@ -1,3 +1,9 @@
+# Never commit the actual config file with credentials
+config.yml
+
+# Downloaded emails directory
+downloaded_emails/
+
 *.gem
 *.rbc
 /.config
