@@ -5,6 +5,7 @@ config.yml
 data/
 logs/
 Gemfile.lock
+.*.swp
 
 *.gem
 *.rbc
