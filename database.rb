@@ -148,6 +148,25 @@ class EmailDatabase
     }
   end
 
+  def move_emails(downloader, uids, destination_folder)
+    return 0 if uids.empty?
+
+    # Move on server
+    moved_uids = downloader.move_emails(uids, destination_folder)
+
+    # Update database to match
+    moved_uids.each do |uid|
+      email = find_email(uid)
+      next unless email
+
+      email[:folder] = destination_folder
+      email[:moved_at] = Time.now.to_s
+    end
+
+    save_database
+    moved_uids.count
+  end
+
   # Read an email's content from its .eml file
   def read_email(email_file)
     unless File.exist?(email_file)

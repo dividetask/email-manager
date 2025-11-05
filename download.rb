@@ -16,7 +16,6 @@ class EmailDownloader
     @logger = logger
   end
 
-  # Connect to the IMAP server
   def connect
     @logger.info "Connecting to #{@host}:#{@port}"
     @imap = Net::IMAP.new(@host, port: @port, ssl: @use_ssl)
@@ -25,20 +24,8 @@ class EmailDownloader
     @logger.info "Connected and selected mailbox: #{@mailbox}"
   end
 
-  # Disconnect from the IMAP server
-  def disconnect
-    if @imap
-      @imap.logout
-      @imap.disconnect
-      @logger.info "Disconnected from server"
-    end
-  end
-
-  # Get list of all email UIDs in the mailbox
-  def get_all_email_uids
-    connect unless @imap
-    @imap.uid_search(['ALL'])
-  end
+  def disconnect; return unless @imap; @imap.logout; @imap.disconnect; @logger.info "Disconnected from server"; end
+  def get_all_email_uids; connect unless @imap; @imap.uid_search(['ALL']); end
 
   # Download emails by their UIDs and save as .eml files
   # Returns an array of email metadata hashes
@@ -95,7 +82,6 @@ class EmailDownloader
     emails
   end
 
-  # Download only new emails that aren't in the already_downloaded list
   def download_new_emails(already_downloaded_uids, storage_dir)
     all_uids = get_all_email_uids
     new_uids = all_uids - already_downloaded_uids
@@ -103,5 +89,29 @@ class EmailDownloader
     @logger.info "Found #{all_uids.count} total emails, #{new_uids.count} new emails"
     
     download_emails(new_uids, storage_dir)
+  end
+
+  def move_emails(uids, destination_folder)
+    return [] if uids.empty?
+
+    connect unless @imap
+    moved_uids = []
+
+    uids.each do |uid|
+      begin
+        @logger.info "Moving email UID #{uid} to #{destination_folder}"
+        @imap.uid_copy(uid, destination_folder)
+        @imap.uid_store(uid, "+FLAGS", [:Deleted])
+        moved_uids << uid
+        @logger.info "Successfully moved UID #{uid}"
+      rescue => e
+        @logger.error "Error moving UID #{uid}: #{e.message}"
+      end
+    end
+
+    # Expunge to permanently delete the moved messages from source folder
+    @imap.expunge if moved_uids.any?
+
+    moved_uids
   end
 end
