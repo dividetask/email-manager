@@ -21,9 +21,10 @@ module Utils
     log_dir = File.dirname(log_file)
     FileUtils.mkdir_p(log_dir) unless log_dir == '.'
 
-    logger = Logger.new(log_file)
-    logger.level = Logger::INFO
-    logger
+    log_obj = Logger.new(log_file)
+    log_obj.level = Logger::INFO
+    logger = Logger.new(STDOUT) #Comment this out to hide logs from console
+    log_obj
   end
 
   class ConfigError < StandardError; end
