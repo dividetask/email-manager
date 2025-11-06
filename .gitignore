@@ -4,6 +4,7 @@ config.yml
 # Downloaded emails directory
 data/
 logs/
+bak/
 Gemfile.lock
 .*.swp
 

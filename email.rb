@@ -4,28 +4,23 @@ require 'logger'
 require 'fileutils'
 
 class EmailDownloader
-  attr_reader :logger
+  attr_reader :imap, :config_data, :logger
 
-  def initialize(config, logger: Logger.new(STDOUT))
-    @host = config[:host]
-    @port = config[:port] || 993
-    @username = config[:username]
-    @password = config[:password]
-    @use_ssl = config[:ssl].nil? ? true : config[:ssl]
-    @mailbox = config[:mailbox] || 'INBOX'
-    @logger = logger
+  def initialize(config_path, log_path)
+    @imap = nil
+    @config_data = Config.new(config_path)
+    @logger = Utils.create_logger(log_path)
   end
 
   def connect
-    @logger.info "Connecting to #{@host}:#{@port}"
-    @imap = Net::IMAP.new(@host, port: @port, ssl: @use_ssl)
-    @imap.login(@username, @password)
-    @imap.select(@mailbox)
-    @logger.info "Connected and selected mailbox: #{@mailbox}"
+    @logger.info "Connecting to #{@config_data.host}:#{@config_data.port}"
+    @imap = Net::IMAP.new(@config_data.host, port: @config_data.port, ssl: @config_data.use_ssl)
+    @imap.login(@config_data.username, @config_data.password)
+    @logger.info "Connected"
   end
 
   def disconnect; return unless @imap; @imap.logout; @imap.disconnect; @logger.info "Disconnected from server"; end
-  def get_all_email_uids; connect unless @imap; @imap.uid_search(['ALL']); end
+  #def get_all_email_uids; connect unless @imap; @imap.uid_search(['ALL']); end
 
   # Download emails by their UIDs and save as .eml files
   # Returns an array of email metadata hashes
@@ -115,3 +110,4 @@ class EmailDownloader
     moved_uids
   end
 end
+

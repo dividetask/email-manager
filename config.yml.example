@@ -17,4 +17,4 @@ database_path: ./data/emails.json
 check_interval: 3600  # Check every hour (in seconds)
 
 # Logging
-log_file: ./logs/email_daemon.log
+log_path: ./logs/email_daemon.log
