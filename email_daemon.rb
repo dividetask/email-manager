@@ -34,12 +34,13 @@ class EmailDaemon
   end
   
   def process_inbox
-    @log_obj.info "Processing INBOX..."
+  	current_folder = 'INBOX'
+    @log_obj.info "Processing #{current_folder}..."
     @imap_obj.ensure_connected
-    @imap_obj.imap_obj.select('INBOX')
+    @imap_obj.imap_obj.select(current_folder)
     
-    uids = @imap_obj.search_folder('INBOX')
-    @log_obj.info "Found #{uids.length} emails in INBOX"
+    uids = @imap_obj.search_folder(current_folder)
+    @log_obj.info "Found #{uids.length} emails in #{current_folder}"
     
     moved_count = 0
     uids.each_slice(100) do |uid_batch|
@@ -51,7 +52,7 @@ class EmailDaemon
           from_addr = @imap_obj.extract_email_from_envelope(envelope)[:email]
           
           target_folder = get_target_folder(from_addr)
-          if target_folder
+          if target_folder and target_folder != current_folder
             move_email(uid, target_folder)
             moved_count += 1
           end
@@ -63,7 +64,7 @@ class EmailDaemon
     
     @log_obj.info "Moved #{moved_count} emails"
   rescue => e
-    @log_obj.error "Error processing inbox: #{e.message}"
+    @log_obj.error "Error processing #{current_folder}: #{e.message}"
   end
   
   def get_target_folder(email_address)
