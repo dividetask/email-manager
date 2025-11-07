@@ -24,6 +24,7 @@ class EmailDaemon
     
     while @running && !@shutdown_requested
       process_inbox
+      @log_obj.info "Sleeping for #{@check_interval} seconds"
       sleep(@check_interval)
     end
 
@@ -63,6 +64,7 @@ class EmailDaemon
             move_email(uid, target_folder)
             moved_count += 1
           end
+          @log_obj.info "Email progress #{moved_count}/#{uids.length}" if moved_count % 10 == 0
         end
       rescue => e
         @log_obj.error "Error processing batch: #{e.message}"
