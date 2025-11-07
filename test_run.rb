@@ -34,6 +34,74 @@ class ContactPrompter
     folders[choice - 1]
   end
 
+  def test_stuff(imap_obj)
+    folders = imap_obj.get_all_folders
+  	current_folder = 'INBOX'
+    @log_obj.info "Processing #{current_folder}..."
+    imap_obj.ensure_connected
+    imap_obj.imap_obj.select(current_folder)
+    
+    uids = imap_obj.search_folder(current_folder)
+    @log_obj.info "Found #{uids.length} emails in #{current_folder}"
+
+    while true
+      p uids.sample(10)
+      print "Enter UID (q - quit, r - refresh): "
+      uid = gets.chomp.downcase
+
+      break if uid == 'q'
+      next if uid == 'r'
+
+      begin
+        uid = uid.to_i
+        fetch_data = imap_obj.imap_obj.uid_fetch([uid], 'ENVELOPE')
+        data = fetch_data.first
+        uid = data.attr['UID']
+        envelope = data.attr['ENVELOPE']
+        from_addr = imap_obj.extract_email_from_envelope(envelope)[:email]
+        subject = imap_obj.extract_email_from_envelope(envelope)[:subject]
+        p data
+        print "Where should we move #{from_addr}, #{subject}\n"
+        target_folder = select_folder(folders)
+        next unless target_folder
+        imap_obj.move_email(uid, target_folder) if target_folder and target_folder != current_folder
+      rescue => e
+        @log_obj.error "Error processing batch: #{e.message}"
+      end
+    end
+  end
+
+  def prompt_move_emails(imap_obj)
+    folders = imap_obj.get_all_folders
+  	current_folder = 'INBOX'
+    @log_obj.info "Processing #{current_folder}..."
+    imap_obj.ensure_connected
+    imap_obj.imap_obj.select(current_folder)
+    
+    uids = imap_obj.search_folder(current_folder)
+    @log_obj.info "Found #{uids.length} emails in #{current_folder}"
+
+    uids.each_slice(100) do |uid_batch|
+      begin
+        fetch_data = imap_obj.imap_obj.uid_fetch(uid_batch, 'ENVELOPE')
+        fetch_data.each do |data|
+          uid = data.attr['UID']
+          envelope = data.attr['ENVELOPE']
+          from_addr = imap_obj.extract_email_from_envelope(envelope)[:email]
+          subject = imap_obj.extract_email_from_envelope(envelope)[:subject]
+          
+          print "Where should we move #{from_addr}, #{subject}\n"
+          target_folder = select_folder(folders)
+          return false unless target_folder
+          imap_obj.move_email(uid, target_folder) if target_folder and target_folder != current_folder
+        end
+      rescue => e
+        @log_obj.error "Error processing batch: #{e.message}"
+      end
+    end
+    
+  end
+
   def prompt_bulk_contacts(imap_obj, selected_folder)
     folders = imap_obj.get_all_folders
     addresses = imap_obj.get_email_addresses_from_folder(selected_folder)
@@ -74,6 +142,7 @@ class ContactPrompter
         priority = priority.empty? ? 0 : priority.to_i
         
         auto_folder = select_folder(folders)
+        next unless auto_folder
         
         contact_obj = Contact.add_record(@data_obj, name: name, priority: priority, auto_folder: auto_folder)
         @log_obj.info "Created contact '#{name}'"
@@ -211,8 +280,14 @@ if __FILE__ == $0
   data_obj = Database.new(config_obj.database_path)
   imap_obj = EmailHandler.new(config_obj, log_obj)
 
-  bulk_address(config_obj, log_obj, data_obj, imap_obj)
+  current_folder = 'INBOX'
+  imap_obj.ensure_connected
+  imap_obj.imap_obj.select(current_folder)
+  imap_obj.expunge
+  #bulk_address(config_obj, log_obj, data_obj, imap_obj)
   #single_address(config_obj, log_obj, data_obj, imap_obj)
+  #prompter = ContactPrompter.new(data_obj, log_obj)
+  #prompter.test_stuff(imap_obj)
 
   imap_obj.disconnect
 

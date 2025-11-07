@@ -45,11 +45,12 @@ class EmailDaemon
     @imap_obj.ensure_connected
     @imap_obj.imap_obj.select(current_folder)
     
-    uids = @imap_obj.search_folder(current_folder)
+    #uids = @imap_obj.search_folder(current_folder)
+    uids = @imap_obj.imap_obj.uid_search(['ALL'])
     @log_obj.info "Found #{uids.length} emails in #{current_folder}"
     
     moved_count = 0
-    uids.each_slice(100) do |uid_batch|
+    uids[0..200].each_slice(100) do |uid_batch|
       begin
         fetch_data = @imap_obj.imap_obj.uid_fetch(uid_batch, 'ENVELOPE')
         fetch_data.each do |data|
@@ -59,7 +60,7 @@ class EmailDaemon
           
           target_folder = get_target_folder(from_addr)
           if target_folder and target_folder != current_folder
-            move_email(uid, target_folder)
+            @imap_obj.move_email(uid, target_folder)
             moved_count += 1
           end
           @log_obj.info "Email progress #{moved_count}/#{uids.length}" if moved_count % 10 == 0
@@ -68,7 +69,9 @@ class EmailDaemon
         @log_obj.error "Error processing batch: #{e.message}"
       end
     end
-    
+    @log_obj.info "**** Expunging ******"
+    @imap_obj.imap_obj.expunge
+
     @log_obj.info "Moved #{moved_count} emails"
   rescue => e
     @log_obj.error "Error processing #{current_folder}: #{e.message}"
@@ -84,14 +87,6 @@ class EmailDaemon
     return DEFAULT_FOLDER unless contact
     
     contact[:auto_folder]
-  end
-  
-  def move_email(uid, target_folder)
-    @imap_obj.imap_obj.uid_copy(uid, target_folder)
-    @imap_obj.imap_obj.uid_store(uid, "+FLAGS", [:Deleted])
-    @log_obj.info "Moved email UID #{uid} to #{target_folder}"
-  rescue => e
-    @log_obj.error "Failed to move email UID #{uid}: #{e.message}"
   end
 end
 

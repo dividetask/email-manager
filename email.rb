@@ -10,9 +10,21 @@ class EmailHandler
 
   def initialize(config_obj, log_obj); @imap_obj = nil; @config_obj = config_obj; @log_obj = log_obj; end
   def ensure_connected; connect unless @imap_obj; end
-  def disconnect; return unless @imap_obj; @imap_obj.logout; @imap_obj.disconnect; @log_obj.info "Disconnected from server"; end
   def search_folder(folder_name = 'INBOX'); ensure_connected; @imap_obj.examine(folder_name); @imap_obj.uid_search(['ALL']); end
   def extract_email_from_envelope(envelope); from = envelope.from[0]; { email: "#{from.mailbox}@#{from.host}", name: from.name }; end
+  def expunge; ensure_connected; @imap_obj.expunge; end
+
+  def disconnect
+    return unless @imap_obj
+    begin
+      @imap_obj.logout
+      @imap_obj.disconnect
+    rescue => e
+      @log_obj.error "Error during disconnect: #{e.message}"
+    end
+    @imap_obj = nil  # Important: set to nil so ensure_connected works
+    @log_obj.info "Disconnected from server"
+  end
 
   def connect
     @log_obj.info "Connecting to #{@config_obj.host}:#{@config_obj.port}"
@@ -72,5 +84,13 @@ class EmailHandler
     end
 
     addresses.compact.uniq { |a| a[:email] }
+  end
+  
+  def move_email(uid, target_folder)
+    @imap_obj.uid_copy(uid, target_folder)
+    @imap_obj.uid_store(uid, "+FLAGS", [:Deleted])
+    @log_obj.info "Moved email UID #{uid} to #{target_folder}"
+  rescue => e
+    @log_obj.error "Failed to move email UID #{uid}: #{e.message}"
   end
 end
