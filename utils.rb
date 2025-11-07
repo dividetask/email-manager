@@ -22,8 +22,8 @@ module Utils
     FileUtils.mkdir_p(log_dir) unless log_dir == '.'
 
     log_obj = Logger.new(log_file)
+    #log_obj = Logger.new(STDOUT) #Comment this out to hide logs from console
     log_obj.level = Logger::INFO
-    logger = Logger.new(STDOUT) #Comment this out to hide logs from console
     log_obj
   end
 
@@ -31,11 +31,12 @@ module Utils
 end
 
 class Config
-  attr_reader :host, :port, :username, :password, :use_ssl, :log_path
+  attr_reader :host, :port, :username, :password, :use_ssl, :log_path, :database_path
 
   def initialize(config_path)
     config_data = Utils.open_yaml(config_path)
     @log_path = config_data[:log_path]
+    @database_path = config_data[:database_path]
 
     email_config = config_data[:email]
     @host = email_config[:host]

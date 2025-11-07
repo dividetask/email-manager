@@ -3,13 +3,14 @@ require 'mail'
 require 'logger'
 require 'fileutils'
 
-
 class EmailHandler
   attr_reader :imap_obj, :config_obj, :log_obj
 
   def initialize(config_obj, log_obj); @imap_obj = nil; @config_obj = config_obj; @log_obj = log_obj; end
+  def ensure_connected; connect unless @imap_obj; end
   def disconnect; return unless @imap_obj; @imap_obj.logout; @imap_obj.disconnect; @log_obj.info "Disconnected from server"; end
-  def search_folder(folder_name = 'INBOX'); connect unless @imap_obj; @imap_obj.examine(folder_name); @imap_obj.uid_search(['ALL']); end
+  def search_folder(folder_name = 'INBOX'); ensure_connected; @imap_obj.examine(folder_name); @imap_obj.uid_search(['ALL']); end
+  def extract_email_from_envelope(envelope); from = envelope.from[0]; { email: "#{from.mailbox}@#{from.host}", name: from.name }; end
 
   def connect
     @log_obj.info "Connecting to #{@config_obj.host}:#{@config_obj.port}"
@@ -18,8 +19,17 @@ class EmailHandler
     @log_obj.info "Connected"
   end
 
+  def safe_folder_operation(folder, operation_name)
+    begin
+      yield
+    rescue => e
+      @log_obj.error "Error #{operation_name} folder '#{folder}': #{e.message}"
+      nil
+    end
+  end
+
   def get_all_folders
-    connect unless @imap_obj
+    ensure_connected
     @log_obj.info "Fetching folders"
     folder_obj_list = @imap_obj.list("", "*")
     return [] if folder_obj_list.nil? || folder_obj_list.empty?
@@ -29,19 +39,36 @@ class EmailHandler
   end
 
   def get_all_uids
-    connect unless @imap_obj
+    ensure_connected
     folders = get_all_folders
     all_uids = {}
     folders.each do |folder|
-      begin
-        uids = search_folder(folder)
-        all_uids[folder] = uids
-        @log_obj.info "Folder '#{folder}': #{uids.length} emails"
-      rescue => e
-        @log_obj.error "Error reading folder '#{folder}': #{e.message}"
-        all_uids[folder] = []
-      end
+      uids = safe_folder_operation(folder, "reading") { search_folder(folder) }
+      all_uids[folder] = uids || []
+      @log_obj.info "Folder '#{folder}': #{all_uids[folder].length} emails"
     end
     all_uids
+  end
+
+  def get_email_addresses_from_folder(folder = 'INBOX')
+    ensure_connected
+    uids = search_folder(folder)
+    return [] if uids.empty?
+
+    @log_obj.info "Fetching envelopes for #{uids.length} emails in batches"
+    addresses = []
+    uids.each_slice(100) do |uid_batch|
+      begin
+        fetch_data = @imap_obj.uid_fetch(uid_batch, 'ENVELOPE')
+        fetch_data.each do |data|
+          envelope = data.attr['ENVELOPE']
+          addresses << extract_email_from_envelope(envelope)
+        end
+      rescue => e
+        @log_obj.error "Error fetching batch: #{e.message}"
+      end
+    end
+
+    addresses.compact.uniq { |a| a[:email] }
   end
 end
