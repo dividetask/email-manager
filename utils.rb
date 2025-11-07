@@ -2,6 +2,20 @@ require 'yaml'
 require 'logger'
 require 'fileutils'
 
+class MultiIO
+  def initialize(*targets)
+    @targets = targets
+  end
+
+  def write(*args)
+    @targets.each { |t| t.write(*args) }
+  end
+
+  def close
+    @targets.each(&:close)
+  end
+end
+
 module Utils
   def self.open_yaml(path)
     unless File.exist?(path)
@@ -17,13 +31,16 @@ module Utils
     end
   end
 
-  def self.create_logger(log_file)
+  def self.create_logger(log_file, output_to_console = false)
     log_dir = File.dirname(log_file)
     FileUtils.mkdir_p(log_dir) unless log_dir == '.'
 
-    log_obj = Logger.new(log_file)
-    #log_obj = Logger.new(STDOUT) #Comment this out to hide logs from console
-    log_obj.level = Logger::INFO
+    loggers = [File.open(log_file, 'a')]
+    loggers << STDOUT if output_to_console
+
+    log_obj = Logger.new(MultiIO.new(*loggers))
+    log_obj.level = Logger::DEBUG
+    #log_obj.level = Logger::INFO
     log_obj
   end
 
@@ -31,12 +48,13 @@ module Utils
 end
 
 class Config
-  attr_reader :host, :port, :username, :password, :use_ssl, :log_path, :database_path
+  attr_reader :host, :port, :username, :password, :use_ssl, :log_path, :database_path, :check_interval
 
   def initialize(config_path)
     config_data = Utils.open_yaml(config_path)
     @log_path = config_data[:log_path]
     @database_path = config_data[:database_path]
+    @check_interval = config_data[:check_interval]
 
     email_config = config_data[:email]
     @host = email_config[:host]

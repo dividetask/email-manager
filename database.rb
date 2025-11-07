@@ -23,7 +23,7 @@ class Table
   def self.add_record(data_obj, **params); record = new(data_obj, **params); record.save; end
   def self.table_name; self.name.downcase + 's'; end
   def self.find(data_obj, **params); get_record_list(data_obj).find { |r| params.all? { |k, v| r[k] == v } }; end 
-  def self.get_record_list(data_obj); data_obj.data[table_name] || []; end
+  def self.get_record_list(data_obj); data_obj.data[table_name.to_sym] || []; end
 
   def to_h
     hash = {}
