@@ -42,31 +42,62 @@ class ContactPrompter
       puts "Name from email: #{addr[:name]}" if addr[:name]
       puts "="*50
       
-      print "Create contact? (y/n/q to quit): "
+
+      print "Action - (n)ew contact, (e)xisting contact, (s)kip, (q)uit: "
       response = gets.chomp.downcase
-      
+
       break if response == 'q'
-      next unless response == 'y'
-      
-      print "Contact name [#{addr[:name]}]: "
-      name = gets.chomp
-      name = addr[:name] if name.empty?
-      
-      print "Priority (0-10) [0]: "
-      priority = gets.chomp
-      priority = priority.empty? ? 0 : priority.to_i
-      
-      auto_folder = select_folder(folders)
-      
-      contact = Contact.add_record(@data_obj, name: name, priority: priority, auto_folder: auto_folder)
-      email_addr = EmailAddress.add_record(@data_obj, contact_id: contact.uid, address: addr[:email])
-      
-      @log_obj.info "Created contact '#{name}' with email #{addr[:email]}"
-      puts "✓ Contact created successfully!"
+      next if response == 's'
+    
+      if response == 'e'
+        contact = select_existing_contact
+        next unless contact
+        
+        email_addr = EmailAddress.add_record(@data_obj, contact_id: contact[:uid], address: addr[:email])
+        @log_obj.info "Added email #{addr[:email]} to existing contact '#{contact[:name]}'"
+        puts "✓ Email added to contact successfully!"
+        
+      elsif response == 'n'
+        print "Contact name [#{addr[:name]}]: "
+        name = gets.chomp
+        name = addr[:name] if name.empty?
+        
+        print "Priority (0-10) [0]: "
+        priority = gets.chomp
+        priority = priority.empty? ? 0 : priority.to_i
+        
+        auto_folder = select_folder(folders)
+        
+        contact = Contact.add_record(@data_obj, name: name, priority: priority, auto_folder: auto_folder)
+        email_addr = EmailAddress.add_record(@data_obj, contact_id: contact.uid, address: addr[:email])
+        
+        @log_obj.info "Created contact '#{name}' with email #{addr[:email]}"
+        puts "✓ Contact created successfully!"
+      end
     end
   end
-end
 
+  def select_existing_contact
+    contacts = Contact.get_record_list(@data_obj)
+    
+    if contacts.empty?
+      puts "No existing contacts found."
+      return nil
+    end
+    
+    puts "\nExisting contacts:"
+    contacts.each_with_index do |contact, i|
+      puts "  #{i + 1}. #{contact[:name]}"
+    end
+    puts "  0. Cancel"
+    
+    print "\nSelect contact (enter number): "
+    choice = gets.chomp.to_i
+    
+    return nil if choice == 0 || choice > contacts.length
+    contacts[choice - 1]
+  end
+end
 
 if __FILE__ == $0
   config_path = ARGV[0] || 'config.yml'
