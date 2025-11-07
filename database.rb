@@ -18,7 +18,7 @@ class Table
   def set_defaults(params); params; end
   def table_name; self.class.table_name; end
   def generate_uid; @uid = @data_obj.generate_uid(table_name); end
-  def save; @data_obj.data[table_name] ||= []; @data_obj.data[table_name] << self.to_h; @data_obj.save; self; end
+  def save; @data_obj.data[table_name.to_sym] ||= []; @data_obj.data[table_name.to_sym] << self.to_h; @data_obj.save; self; end
 
   def self.add_record(data_obj, **params); record = new(data_obj, **params); record.save; end
   def self.table_name; self.name.downcase + 's'; end
