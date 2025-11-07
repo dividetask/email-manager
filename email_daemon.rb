@@ -50,7 +50,7 @@ class EmailDaemon
     @log_obj.info "Found #{uids.length} emails in #{current_folder}"
     
     moved_count = 0
-    uids[0..200].each_slice(100) do |uid_batch|
+    uids.each_slice(100) do |uid_batch|
       begin
         fetch_data = @imap_obj.imap_obj.uid_fetch(uid_batch, 'ENVELOPE')
         fetch_data.each do |data|
