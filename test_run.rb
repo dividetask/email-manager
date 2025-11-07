@@ -156,35 +156,49 @@ class ContactPrompter
   end
 end
 
-if __FILE__ == $0
-  config_path = ARGV[0] || 'config.yml'
-  config_obj = Config.new(config_path)
-  log_path = config_obj.log_path || './logs/email_daemon.log'
-  log_obj = Utils.create_logger(log_path)
 
+def clean_database
+end
 
-  data_obj = Database.new(config_obj.database_path)
-  imap_obj = EmailHandler.new(config_obj, log_obj)
-
+def single_address(config_obj, log_obj, data_obj, imap_obj)
   log_obj.info "Fetching email addresses from INBOX"
   addresses = imap_obj.get_email_addresses_from_folder('INBOX')
   log_obj.info "Found #{addresses.length} unique email addresses"
 
   prompter = ContactPrompter.new(data_obj, log_obj)
 
-	if true # Bulk Stuff
-    prompter.prompt_bulk_contacts(imap_obj)
-  else # Old Stuff....needs to be moved to another function
-    unknown = prompter.get_unknown_addresses(addresses)
+  unknown = prompter.get_unknown_addresses(addresses)
 
-    puts "\nFound #{unknown.length} unknown email addresses"
+  puts "\nFound #{unknown.length} unknown email addresses"
 
-    if unknown.empty?
-      puts "All email addresses are already in the database!"
-    else
-      prompter.prompt_create_contacts(unknown, imap_obj)
-    end
+  if unknown.empty?
+    puts "All email addresses are already in the database!"
+  else
+    prompter.prompt_create_contacts(unknown, imap_obj)
   end
+end
+
+def bulk_address(config_obj, log_obj, data_obj, imap_obj)
+  log_obj.info "Fetching email addresses from INBOX"
+  addresses = imap_obj.get_email_addresses_from_folder('INBOX')
+  log_obj.info "Found #{addresses.length} unique email addresses"
+
+  prompter = ContactPrompter.new(data_obj, log_obj)
+  prompter.prompt_bulk_contacts(imap_obj)
+end
+
+if __FILE__ == $0
+  config_path = ARGV[0] || 'config.yml'
+  config_obj = Config.new(config_path)
+  log_path = config_obj.log_path || './logs/email_daemon.log'
+  log_obj = Utils.create_logger(log_path)
+
+  data_obj = Database.new(config_obj.database_path)
+  imap_obj = EmailHandler.new(config_obj, log_obj)
+
+  #bulk_address(config_obj, log_obj, data_obj, imap_obj)
+  #single_address(config_obj, log_obj, data_obj, imap_obj)
+
 
   imap_obj.disconnect
 
