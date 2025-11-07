@@ -3,6 +3,8 @@ require 'mail'
 require 'logger'
 require 'fileutils'
 
+DEFAULT_FOLDER = "INBOX/Unsorted"
+
 class EmailHandler
   attr_reader :imap_obj, :config_obj, :log_obj
 

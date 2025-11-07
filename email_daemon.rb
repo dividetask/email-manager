@@ -3,8 +3,6 @@ require_relative 'utils'
 require_relative 'email'
 require_relative 'database'
 
-DEFAULT_FOLDER = "INBOX/Unsorted"
-
 class EmailDaemon
   attr_reader :config_obj, :log_obj, :data_obj, :imap_obj, :check_interval, :running, :shutdown_requested
   

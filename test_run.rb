@@ -34,18 +34,19 @@ class ContactPrompter
     folders[choice - 1]
   end
 
-  def prompt_bulk_contacts(imap_obj)
+  def prompt_bulk_contacts(imap_obj, selected_folder)
     folders = imap_obj.get_all_folders
-    addresses = imap_obj.get_email_addresses_from_folder('INBOX')
+    addresses = imap_obj.get_email_addresses_from_folder(selected_folder)
     unknown_list = get_unknown_addresses(addresses)
 
     while true
-      unknown_list[0..10].each { |addr| print " #{addr[:email]}\n" }
+      unknown_list.sample(10).each { |addr| print " #{addr[:email]}\n" }
 
-      print "Enter Search (q - quit): "
+      print "Enter Search (q - quit, r - refresh): "
       search = gets.chomp.downcase
 
       break if search == 'q'
+      next if search == 'r'
 
       addr_list = unknown_list.select { |record| (record[:name] || []).include?(search) || (record[:email] || []).include?(search) }
 
@@ -61,7 +62,7 @@ class ContactPrompter
 
       if response == 'e'
         contact_hash = select_existing_contact
-        next unless contact
+        next unless contact_hash
         
       elsif response == 'n'
         print "Contact name [#{addr_list.first[:name]}]: "
@@ -143,10 +144,10 @@ class ContactPrompter
     end
     
     puts "\nExisting contacts:"
+    puts "  0. Cancel"
     contact_list.each_with_index do |contact_hash, i|
       puts "  #{i + 1}. #{contact_hash[:name]}"
     end
-    puts "  0. Cancel"
     
     print "\nSelect contact (enter number): "
     choice = gets.chomp.to_i
@@ -188,12 +189,15 @@ def single_address(config_obj, log_obj, data_obj, imap_obj)
 end
 
 def bulk_address(config_obj, log_obj, data_obj, imap_obj)
-  log_obj.info "Fetching email addresses from INBOX"
-  addresses = imap_obj.get_email_addresses_from_folder('INBOX')
-  log_obj.info "Found #{addresses.length} unique email addresses"
+  #current_folder = 'INBOX'
 
+  #log_obj.info "Fetching email addresses from #{current_folder}"
+  #addresses = imap_obj.get_email_addresses_from_folder(current_folder)
+  #log_obj.info "Found #{addresses.length} unique email addresses"
+
+  current_folder = DEFAULT_FOLDER
   prompter = ContactPrompter.new(data_obj, log_obj)
-  prompter.prompt_bulk_contacts(imap_obj)
+  prompter.prompt_bulk_contacts(imap_obj, current_folder)
 end
 
 if __FILE__ == $0
