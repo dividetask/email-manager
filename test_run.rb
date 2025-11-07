@@ -157,7 +157,16 @@ class ContactPrompter
 end
 
 
-def clean_database
+def clean_email_uids()
+  config_path = ARGV[0] || 'config.yml'
+  config_obj = Config.new(config_path)
+  log_path = config_obj.log_path || './logs/email_daemon.log'
+  log_obj = Utils.create_logger(log_path)
+
+  data_obj = Database.new(config_obj.database_path)
+
+  log_obj.info "Cleaning UIDs for Email Addresses"
+  EmailAddress.clean_uids(data_obj, log_obj)
 end
 
 def single_address(config_obj, log_obj, data_obj, imap_obj)
@@ -188,6 +197,8 @@ def bulk_address(config_obj, log_obj, data_obj, imap_obj)
 end
 
 if __FILE__ == $0
+  #clean_email_uids()
+
   config_path = ARGV[0] || 'config.yml'
   config_obj = Config.new(config_path)
   log_path = config_obj.log_path || './logs/email_daemon.log'
@@ -196,9 +207,8 @@ if __FILE__ == $0
   data_obj = Database.new(config_obj.database_path)
   imap_obj = EmailHandler.new(config_obj, log_obj)
 
-  #bulk_address(config_obj, log_obj, data_obj, imap_obj)
+  bulk_address(config_obj, log_obj, data_obj, imap_obj)
   #single_address(config_obj, log_obj, data_obj, imap_obj)
-
 
   imap_obj.disconnect
 

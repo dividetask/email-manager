@@ -21,9 +21,18 @@ class Table
   def save; @data_obj.data[table_name.to_sym] ||= []; @data_obj.data[table_name.to_sym] << self.to_h; @data_obj.save; self; end
 
   def self.add_record(data_obj, **params); record = new(data_obj, **params); record.save; end
-  def self.table_name; self.name.downcase + 's'; end
+  def self.table_name; (self.name.downcase + 's').to_sym; end
   def self.find(data_obj, **params); get_record_list(data_obj).find { |r| params.all? { |k, v| r[k] == v } }; end 
   def self.get_record_list(data_obj); data_obj.data[table_name.to_sym] || []; end
+
+	#WARNING THIS WILL BREAK REFERENCES
+  def self.clean_uids(data_obj, log_obj)
+    get_record_list(data_obj).each do |record| 
+      record[:uid] = data_obj.generate_uid(table_name)
+      log_obj.info "New UID for #{record}"
+    end
+    data_obj.save
+  end
 
   def to_h
     hash = {}
