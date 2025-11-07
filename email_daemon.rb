@@ -6,7 +6,7 @@ require_relative 'database'
 DEFAULT_FOLDER = "INBOX/Unsorted"
 
 class EmailDaemon
-  attr_reader :config_obj, :log_obj, :data_obj, :imap_obj, :check_interval
+  attr_reader :config_obj, :log_obj, :data_obj, :imap_obj, :check_interval, :running, :shutdown_requested
   
   def initialize(config_path)
     @config_obj = Config.new(config_path)
@@ -15,22 +15,29 @@ class EmailDaemon
     @imap_obj = EmailHandler.new(@config_obj, @log_obj)
     @check_interval = @config_obj.check_interval || 3600
     @running = false
+    @shutdown_requested = false
   end
   
   def start
     @running = true
     @log_obj.info "Email daemon started. Checking every #{@check_interval} seconds"
     
-    while @running
+    while @running && !@shutdown_requested
       process_inbox
       sleep(@check_interval)
     end
+
+    @imap_obj.disconnect
+    @log_obj.info "Email daemon stopped gracefully"
+  end
+
+  def request_shutdown
+    @log_obj.info "Shutdown requested, will stop after current batch..."
+    @shutdown_requested = true
   end
   
   def stop
     @running = false
-    @imap_obj.disconnect
-    @log_obj.info "Email daemon stopped"
   end
   
   def process_inbox
@@ -92,8 +99,8 @@ if __FILE__ == $0
   config_path = ARGV[0] || 'config.yml'
   daemon = EmailDaemon.new(config_path)
   
-  trap('INT') { daemon.stop; exit }
-  trap('TERM') { daemon.stop; exit }
+  trap('INT') { daemon.request_shutdown; exit }
+  trap('TERM') { daemon.request_shutdown; exit }
   
   daemon.start
 end
