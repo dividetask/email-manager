@@ -3,6 +3,8 @@ require_relative 'utils'
 require_relative 'email'
 require_relative 'database'
 
+DEFAULT_FOLDER = "INBOX/Unsorted"
+
 class EmailDaemon
   attr_reader :config_obj, :log_obj, :data_obj, :imap_obj, :check_interval
   
@@ -65,19 +67,13 @@ class EmailDaemon
   end
   
   def get_target_folder(email_address)
-    #@log_obj.debug "Table name: #{EmailAddress.table_name}"
-    #@log_obj.debug "Database keys: #{@data_obj.data.keys.inspect}"
-
     all_emails = EmailAddress.get_record_list(@data_obj)
-    #@log_obj.debug "All email records: #{all_emails.inspect}"
 
     email_record = EmailAddress.find(@data_obj, address: email_address)
-    #@log_obj.debug "Looking for email: #{email_address}, found: #{email_record.inspect}"
-    return nil unless email_record
+    return DEFAULT_FOLDER unless email_record
     
     contact = Contact.find(@data_obj, uid: email_record[:contact_id])
-    #@log_obj.debug "Found contact: #{contact.inspect}"
-    return nil unless contact
+    return DEFAULT_FOLDER unless contact
     
     contact[:auto_folder]
   end
