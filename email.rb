@@ -5,92 +5,213 @@ require 'fileutils'
 
 DEFAULT_FOLDER = "INBOX/Unsorted"
 
-class EmailHandler
-  attr_reader :imap_obj, :config_obj, :log_obj
+class Common
+  attr_reader :config_obj, :log_obj, :data_obj
+  def log_info message; @log_obj.info message; end
+  def error message; @log_obj.error message; end
 
-  def initialize(config_obj, log_obj); @imap_obj = nil; @config_obj = config_obj; @log_obj = log_obj; end
-  def ensure_connected; connect unless @imap_obj; end
-  def search_folder(folder_name = 'INBOX'); ensure_connected; @imap_obj.examine(folder_name); @imap_obj.uid_search(['ALL']); end
-  def extract_email_from_envelope(envelope); from = envelope.from[0]; { email: "#{from.mailbox}@#{from.host}", name: from.name }; end
-  def expunge; ensure_connected; @imap_obj.expunge; end
+  def initialize(config_path)
+    @config_obj = Config.new(config_path)
+    @log_obj = Utils.create_logger(@config_obj.log_path, true)
+    @data_obj = Database.new(@config_obj.database_path)
+  end
+end
 
-  def disconnect
-    return unless @imap_obj
-    begin
-      @imap_obj.logout
-      @imap_obj.disconnect
-    rescue => e
-      @log_obj.error "Error during disconnect: #{e.message}"
+class EmailDaemon
+  attr_reader :common_obj, :email_sorter, :check_interval, :running, :shutdown_requested, :test_run_once
+  def stop; @running = false; end
+  def request_shutdown; @common_obj.log_info "Shutdown requested..."; @shutdown_requested = true; end
+
+  def initialize(common_obj, test_run_once = false)
+  	@common_obj = common_obj
+    @email_sorter = EmailSorter.new(@common_obj.config_obj, @common_obj.log_obj, @common_obj.data_obj)
+    @check_interval = @common_obj.config_obj.check_interval || 3600
+    @running = false
+    @shutdown_requested = false
+    @test_run_once = test_run_once
+  end
+
+  def start(&task)
+    raise ArgumentError, "No task block provided" unless block_given?
+
+    @running = true
+    @common_obj.log_info "Daemon started. Running task every #{@check_interval} seconds"
+
+    while @running && !@shutdown_requested
+      begin
+        task.call
+      rescue => e
+        @common_obj.error "Error running task: #{e.message}"
+      end
+
+      @common_obj.log_info "Sleeping for #{@check_interval} seconds"
+      break if @test_run_once
+      sleep(@check_interval)
     end
-    @imap_obj = nil  # Important: set to nil so ensure_connected works
-    @log_obj.info "Disconnected from server"
-  end
 
-  def connect
-    @log_obj.info "Connecting to #{@config_obj.host}:#{@config_obj.port}"
-    @imap_obj = Net::IMAP.new(@config_obj.host, port: @config_obj.port, ssl: @config_obj.use_ssl)
-    @imap_obj.login(@config_obj.username, @config_obj.password)
-    @log_obj.info "Connected"
+    @common_obj.log_info "Daemon stopped gracefully"
   end
+end
 
-  def safe_folder_operation(folder, operation_name)
-    begin
-      yield
-    rescue => e
-      @log_obj.error "Error #{operation_name} folder '#{folder}': #{e.message}"
-      nil
+class EmailSorter
+  attr_reader :common_obj, :email_repo
+  def initialize(common_obj); @common_obj = common_obj; @email_repo = EmailRepository.new(config_obj, log_obj); end
+  def get_responded_to_emails; @email_repo.fetch_sent_recipients; end
+  def cleanup; @email_repo.disconnect; end
+  
+  def process_inbox
+    @common_obj.log_info "Processing INBOX..."
+    
+    emails = @email_repo.fetch_inbox_emails
+    @common_obj.log_info "Found #{emails.length} emails"
+    
+    moved_count = 0
+    emails.each_with_index do |email, index|
+      target_folder = determine_target_folder(email[:from])
+      
+      if target_folder && target_folder != 'INBOX'
+        @email_repo.move_email(email[:uid], target_folder)
+        moved_count += 1
+      end
+      
+      @common_obj.log_info "Progress #{index + 1}/#{emails.length}" if (index + 1) % 10 == 0
     end
+    
+    @email_repo.expunge
+    @common_obj.log_info "Moved #{moved_count} emails"
+  rescue => e
+    @common_obj.error "Error processing inbox: #{e.message}"
+  end
+  
+  private
+  
+  def determine_target_folder(email_address)
+    email_record = EmailAddress.find(@common_obj.data_obj, address: email_address)
+    return DEFAULT_FOLDER unless email_record
+    
+    contact = Contact.find(@common_obj.data_obj, uid: email_record[:contact_id])
+    return DEFAULT_FOLDER unless contact
+    
+    contact[:auto_folder]
+  end
+end
+
+class EmailRepository
+  attr_reader :common_obj, :handler
+  def initialize(common_obj); @common_obj = common_obj; @handler = EmailHandler.new(@common_obj); end
+  def move_email(uid, target_folder); @handler.move_email(uid, target_folder); end
+  def expunge; @handler.expunge; end
+  def disconnect; @handler.disconnect; end
+
+  def fetch_inbox_emails
+    @handler.ensure_connected
+    @handler.select_folder('INBOX')
+
+    uids = @handler.search_all
+    fetch_emails_by_uids(uids)
   end
 
-  def get_all_folders
-    ensure_connected
-    @log_obj.info "Fetching folders"
-    folder_obj_list = @imap_obj.list("", "*")
-    return [] if folder_obj_list.nil? || folder_obj_list.empty?
-    folder_name_list = folder_obj_list.map { |folder| folder.name }
-    @log_obj.info "Found #{folder_name_list.length} folders"
-    folder_name_list
-  end
+  def fetch_sent_recipients
+    @handler.ensure_connected
+    @handler.select_folder('Sent')
 
-  def get_all_uids
-    ensure_connected
-    folders = get_all_folders
-    all_uids = {}
-    folders.each do |folder|
-      uids = safe_folder_operation(folder, "reading") { search_folder(folder) }
-      all_uids[folder] = uids || []
-      @log_obj.info "Folder '#{folder}': #{all_uids[folder].length} emails"
+    uids = @handler.search_all
+    recipients = []
+
+    uids.each_slice(100) do |uid_batch|
+      envelopes = @handler.fetch_envelopes(uid_batch)
+      envelopes.each do |envelope|
+        if envelope[:to]
+          recipients.concat(envelope[:to])
+        end
+      end
     end
-    all_uids
+
+    recipients.uniq
   end
 
-  def get_email_addresses_from_folder(folder = 'INBOX')
-    ensure_connected
-    uids = search_folder(folder)
-    return [] if uids.empty?
+  private
 
-    @log_obj.info "Fetching envelopes for #{uids.length} emails in batches"
-    addresses = []
+  def fetch_emails_by_uids(uids)
+    emails = []
+
     uids.each_slice(100) do |uid_batch|
       begin
-        fetch_data = @imap_obj.uid_fetch(uid_batch, 'ENVELOPE')
-        fetch_data.each do |data|
-          envelope = data.attr['ENVELOPE']
-          addresses << extract_email_from_envelope(envelope)
+        envelopes = @handler.fetch_envelopes(uid_batch)
+        envelopes.each do |env|
+          emails << {
+            uid: env[:uid],
+            from: env[:from],
+            to: env[:to],
+            subject: env[:subject]
+          }
         end
       rescue => e
         @log_obj.error "Error fetching batch: #{e.message}"
       end
     end
 
-    addresses.compact.uniq { |a| a[:email] }
+    emails
+  end
+end
+
+class EmailHandler
+  attr_reader :imap_obj, :common_obj
+  def initialize(common_obj); @common_obj = common_obj; @imap_obj = nil; end
+  def ensure_connected; connect unless @imap_obj; end
+  def select_folder(folder); ensure_connected; @imap_obj.select(folder); end
+  def search_all; @imap_obj.uid_search(['ALL']); end
+  def expunge; @imap_obj.expunge; end
+  def list_folders; ensure_connected; folder_list = @imap_obj.list("", "*"); return [] unless folder_list; folder_list.map(&:name); end
+  def get_uids_by_folder(folder); select_folder(folder); search_all; end
+  
+  def connect
+    @common_obj.log_info "Connecting to #{@common_obj.config_obj.host}:#{@common_obj.config_obj.port}"
+    @imap_obj = Net::IMAP.new(
+      @common_obj.config_obj.host,
+      port: @common_obj.config_obj.port,
+      ssl: @common_obj.config_obj.use_ssl
+    )
+    @imap_obj.login(@common_obj.config_obj.username, @common_obj.config_obj.password)
+    @common_obj.log_info "Connected"
+  end
+  
+  def disconnect
+    return unless @imap_obj
+    
+    @imap_obj.logout
+    @imap_obj.disconnect
+    @imap_obj = nil
+    @common_obj.log_info "Disconnected"
+  rescue => e
+    @common_obj.error "Error during disconnect: #{e.message}"
+  end
+  
+  def fetch_envelopes(uids)
+    fetch_data = @imap_obj.uid_fetch(uids, 'ENVELOPE')
+    
+    fetch_data.map do |data|
+      envelope = data.attr['ENVELOPE']
+      {
+        uid: data.attr['UID'],
+        from: extract_address(envelope.from&.first),
+        to: extract_addresses(envelope.to),
+        subject: envelope.subject
+      }
+    end
   end
   
   def move_email(uid, target_folder)
     @imap_obj.uid_copy(uid, target_folder)
     @imap_obj.uid_store(uid, "+FLAGS", [:Deleted])
-    @log_obj.info "Moved email UID #{uid} to #{target_folder}"
+    @log_obj.info "Moved UID #{uid} to #{target_folder}"
   rescue => e
-    @log_obj.error "Failed to move email UID #{uid}: #{e.message}"
+    @log_obj.error "Failed to move UID #{uid}: #{e.message}"
   end
+  
+  private
+  
+  def extract_address(address_obj); return nil unless address_obj; "#{address_obj.mailbox}@#{address_obj.host}"; end
+  def extract_addresses(address_list); return [] unless address_list; address_list.map { |addr| extract_address(addr) }.compact; end
 end
+

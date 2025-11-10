@@ -45,7 +45,6 @@ class EmailDaemon
     @imap_obj.ensure_connected
     @imap_obj.imap_obj.select(current_folder)
     
-    #uids = @imap_obj.search_folder(current_folder)
     uids = @imap_obj.imap_obj.uid_search(['ALL'])
     @log_obj.info "Found #{uids.length} emails in #{current_folder}"
     
@@ -75,6 +74,31 @@ class EmailDaemon
     @log_obj.info "Moved #{moved_count} emails"
   rescue => e
     @log_obj.error "Error processing #{current_folder}: #{e.message}"
+  end
+  
+  def get_all_emails_responded_to
+    folders = @imap_obj.get_all_folders
+    current_folder = 'Sent'
+    emails_responded_to = []
+
+    while true
+      @imap_obj.ensure_connected
+      @imap_obj.imap_obj.select(current_folder)
+      uids = @imap_obj.imap_obj.uid_search(['ALL'])
+
+      begin
+        uid = uids.first
+        fetch_data = @imap_obj.imap_obj.uid_fetch([uid], 'ENVELOPE')
+        data = fetch_data.first
+        envelope = data.attr['ENVELOPE']
+        emails_responded_to << envelope.to.map { |e| "#{e.mailbox}@#{e.host}" }
+      rescue => e
+        @log_obj.error "Error processing batch: #{e.message}"
+      end
+
+      @imap_obj.disconnect
+    end
+    emails_responded_to
   end
   
   def get_target_folder(email_address)
