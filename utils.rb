@@ -124,7 +124,7 @@ class Menu
   end
 
   def select_existing_contact
-    contact_list = Contact.get_record_list(@common_obj.data_obj)
+    contact_list = Contact.all(@common_obj.data_obj)
     
     if contact_list.empty?
       puts "No existing contacts found."
@@ -154,7 +154,7 @@ class Menu
       break if search == 'q'
       next if search == 'r'
 
-      addr_list = unknown_list.select { |record| (record[:name] || []).include?(search) || (record[:from] || []).include?(search) }.uniq { |record| record[:from] }
+      addr_list = unknown_list.select { |record| record[:name]&.downcase&.include?(search) || record[:from]&.downcase&.include?(search) }.uniq { |record| record[:from] }
 
       print "Found #{addr_list.count} records\n"
       next unless addr_list.count > 0

@@ -24,7 +24,7 @@ class EmailDaemon
 
   def initialize(common_obj, test_run_once = false)
   	@common_obj = common_obj
-    @email_sorter = EmailSorter.new(@common_obj.config_obj, @common_obj.log_obj, @common_obj.data_obj)
+    @email_sorter = EmailSorter.new(@common_obj)
     @check_interval = @common_obj.config_obj.check_interval || 3600
     @running = false
     @shutdown_requested = false
@@ -55,21 +55,21 @@ end
 
 class EmailSorter
   attr_reader :common_obj, :email_repo
-  def initialize(common_obj); @common_obj = common_obj; @email_repo = EmailRepository.new(config_obj, log_obj); end
+  def initialize(common_obj); @common_obj = common_obj; @email_repo = EmailRepository.new(common_obj); end
   def get_responded_to_emails; @email_repo.fetch_sent_recipients; end
   def cleanup; @email_repo.disconnect; end
   
-  def process_inbox
-    @common_obj.log_info "Processing INBOX..."
+  def process_folder folder
+    @common_obj.log_info "Processing #{folder}..."
     
-    emails = @email_repo.fetch_inbox_emails
+    emails = @email_repo.fetch_emails folder
     @common_obj.log_info "Found #{emails.length} emails"
     
     moved_count = 0
     emails.each_with_index do |email, index|
       target_folder = determine_target_folder(email[:from])
       
-      if target_folder && target_folder != 'INBOX'
+      if target_folder && target_folder != folder
         @email_repo.move_email(email[:uid], target_folder)
         moved_count += 1
       end
@@ -88,11 +88,11 @@ class EmailSorter
   def determine_target_folder(email_address)
     email_record = EmailAddress.find(@common_obj.data_obj, address: email_address)
     return DEFAULT_FOLDER unless email_record
-    
-    contact = Contact.find(@common_obj.data_obj, uid: email_record[:contact_id])
+
+    contact = Contact.find(@common_obj.data_obj, uid: email_record.contact_id)
     return DEFAULT_FOLDER unless contact
-    
-    contact[:auto_folder]
+
+    contact.auto_folder
   end
 end
 
@@ -103,9 +103,9 @@ class EmailRepository
   def expunge; @handler.expunge; end
   def disconnect; @handler.disconnect; end
 
-  def fetch_inbox_emails
+  def fetch_emails folder
     @handler.ensure_connected
-    @handler.select_folder('INBOX')
+    @handler.select_folder(folder)
 
     uids = @handler.search_all
     fetch_emails_by_uids(uids)
@@ -147,7 +147,7 @@ class EmailRepository
           }
         end
       rescue => e
-        @log_obj.error "Error fetching batch: #{e.message}"
+        @common_obj.error "Error fetching batch: #{e.message}"
       end
     end
 
@@ -205,9 +205,9 @@ class EmailHandler
   def move_email(uid, target_folder)
     @imap_obj.uid_copy(uid, target_folder)
     @imap_obj.uid_store(uid, "+FLAGS", [:Deleted])
-    @log_obj.info "Moved UID #{uid} to #{target_folder}"
+    @common_obj.log_info "Moved UID #{uid} to #{target_folder}"
   rescue => e
-    @log_obj.error "Failed to move UID #{uid}: #{e.message}"
+    @common_obj.error "Failed to move UID #{uid}: #{e.message}"
   end
   
   private

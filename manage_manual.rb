@@ -28,8 +28,7 @@ module ManageManual
     envelopes = handler.fetch_envelopes(uids)
 
     current_email_list = EmailAddress.all(common_obj.data_obj).map { |email| email[:address] }.flatten.map { |email| email.downcase }
-    unknown_list = envelopes.select { |e| !current_email_list.include? e[:from] }
-
+    unknown_list = envelopes.select { |e| !current_email_list.include? e[:from].downcase }
 
 		menu_obj.prompt_for_each_recievied_email unknown_list, folders
 
