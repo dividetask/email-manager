@@ -69,7 +69,7 @@ class Menu
   attr_reader :common_obj
   def initialize(common_obj); @common_obj = common_obj; end
 
-  def prompt_for_each_email new_email_list, folders
+  def prompt_for_each_sent_email new_email_list, folders
     new_email_list.each do |new_email|
       print "Add Email #{new_email} - (n)ew contact, (e)xisting contact, (s)kip, (q)uit: "
       response = gets.chomp.downcase
@@ -142,5 +142,60 @@ class Menu
     
     return nil if choice == 0 || choice > contact_list.length
     contact_list[choice - 1]
+  end
+
+  def prompt_for_each_recievied_email unknown_list, folders
+    while true
+      unknown_list.sample(10).each { |addr| print " #{addr[:from]}\n" }
+
+      print "Enter Search (q - quit, r - refresh): "
+      search = gets.chomp.downcase
+
+      break if search == 'q'
+      next if search == 'r'
+
+      addr_list = unknown_list.select { |record| (record[:name] || []).include?(search) || (record[:from] || []).include?(search) }.uniq { |record| record[:from] }
+
+      print "Found #{addr_list.count} records\n"
+      next unless addr_list.count > 0
+      addr_list.each { |addr| print " #{addr[:from]}\n" }
+
+      print "Action - (n)ew contact, (e)xisting contact, (s)kip, (q)uit: "
+      response = gets.chomp.downcase
+
+      break if response == 'q'
+      next if response == 's'
+
+      if response == 'e'
+        contact_hash = select_existing_contact
+        next unless contact_hash
+        
+      elsif response == 'n'
+        print "Contact name [#{addr_list.first[:name]}]: "
+        name = gets.chomp
+        name = addr_list.first[:name] if name.empty?
+        
+        print "Priority (0-10) [0]: "
+        priority = gets.chomp
+        priority = priority.empty? ? 0 : priority.to_i
+        
+        auto_folder = select_folder(folders)
+        next unless auto_folder
+        
+        contact_obj = Contact.add_record(@common_obj.data_obj, name: name, priority: priority, auto_folder: auto_folder)
+        @common_obj.log_info "Created contact '#{name}'"
+        puts "✓ Contact created successfully!"
+        contact_hash = contact_obj.to_h
+      else 
+        next
+      end
+        
+      addr_list.each do |addr|
+        email_addr = EmailAddress.add_record(@common_obj.data_obj, contact_id: contact_hash[:uid], address: addr[:from])
+        @common_obj.log_info "Added email #{addr[:from]} to contact '#{contact_hash[:name]}'"
+      end
+      puts "✓ #{addr_list.count} emails added to contact successfully!"
+      unknown_list = unknown_list - addr_list
+    end
   end
 end

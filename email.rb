@@ -195,6 +195,7 @@ class EmailHandler
       {
         uid: data.attr['UID'],
         from: extract_address(envelope.from&.first),
+        name: extract_name(envelope.from&.first),
         to: extract_addresses(envelope.to),
         subject: envelope.subject
       }
@@ -213,5 +214,6 @@ class EmailHandler
   
   def extract_address(address_obj); return nil unless address_obj; "#{address_obj.mailbox}@#{address_obj.host}"; end
   def extract_addresses(address_list); return [] unless address_list; address_list.map { |addr| extract_address(addr) }.compact; end
+  def extract_name(address_obj); return nil unless address_obj; address_obj.name; end
 end
 
