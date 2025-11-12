@@ -54,13 +54,30 @@ class EmailDaemon
 end
 
 class EmailSorter
-  attr_reader :common_obj, :email_repo
+  attr_reader :common_obj, :email_repo, :recognized_emails
   def initialize(common_obj); @common_obj = common_obj; @email_repo = EmailRepository.new(common_obj); end
   def get_responded_to_emails; @email_repo.fetch_sent_recipients; end
   def cleanup; @email_repo.disconnect; end
   
-  def process_folder folder
+  def get_all_addresses_sent_to
+    uids = @email_repo.handler.get_uids_by_folder('Sent')
+
+    all_recipients = []
+    uids.each_slice(100) do |uid_batch|
+      envelopes = @email_repo.handler.fetch_envelopes(uid_batch)
+      envelopes.each do |env|
+        all_recipients.concat(env[:to]) if env[:to]
+      end
+    end
+
+    all_recipients.flatten.map(&:downcase).uniq
+  end
+
+  def process_folder folder, max_emails = nil
     @common_obj.log_info "Processing #{folder}..."
+
+    @recognized_emails = get_all_addresses_sent_to
+    @common_obj.log_info "Found #{@recognized_emails.length} email addresses sent to"
     
     emails = @email_repo.fetch_emails folder
     @common_obj.log_info "Found #{emails.length} emails"
@@ -72,6 +89,11 @@ class EmailSorter
       if target_folder && target_folder != folder
         @email_repo.move_email(email[:uid], target_folder)
         moved_count += 1
+      end
+
+      if max_emails && max_emails >= moved_count
+        @common_obj.log_info "Exiting early, max emails reached (#{max_emails})"
+        break
       end
       
       @common_obj.log_info "Progress #{index + 1}/#{emails.length}" if (index + 1) % 10 == 0
@@ -86,11 +108,12 @@ class EmailSorter
   private
   
   def determine_target_folder(email_address)
+  	default_folder = (@recognized_emails.include? email_address) ? 'INBOX' : DEFAULT_FOLDER
     email_record = EmailAddress.find(@common_obj.data_obj, address: email_address)
-    return DEFAULT_FOLDER unless email_record
+    return default_folder unless email_record
 
     contact = Contact.find(@common_obj.data_obj, uid: email_record.contact_id)
-    return DEFAULT_FOLDER unless contact
+    return default_folder unless contact
 
     contact.auto_folder
   end

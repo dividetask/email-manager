@@ -34,6 +34,13 @@ module ManageManual
 
     handler.disconnect
   end
-end
 
+  def self.single_daemon_iteration config_path
+    common_obj = Common.new(config_path)
+    sorter = EmailSorter.new(common_obj)
+    sorter.process_folder 'INBOX', 300
+    sorter.process_folder 'INBOX/Unsorted', 300
+    sorter.cleanup
+  end
+end
 
