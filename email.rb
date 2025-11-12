@@ -125,6 +125,7 @@ class EmailRepository
   def move_email(uid, target_folder); @handler.move_email(uid, target_folder); end
   def expunge; @handler.expunge; end
   def disconnect; @handler.disconnect; end
+  def delete(folder, uid); @handler.select_folder(folder); @handler.move_email(uid, 'Trash'); end
 
   def fetch_emails folder
     @handler.ensure_connected
@@ -132,6 +133,32 @@ class EmailRepository
 
     uids = @handler.search_all
     fetch_emails_by_uids(uids)
+  end
+
+  def find_duplicates(folder_list)
+    all_emails = {}
+    duplicates = {}
+
+    folder_list.each do |folder|
+      @handler.ensure_connected
+      @handler.select_folder(folder)
+      
+      uids = @handler.search_all
+      
+      uids.each_slice(100) do |uid_batch|
+        envelopes = @handler.fetch_envelopes(uid_batch)
+        envelopes.each do |env|
+          if all_emails[env[:message_id]]
+            duplicates[env[:message_id]] = [all_emails[env[:message_id]]] unless duplicates[env[:message_id]]
+            duplicates[env[:message_id]] << { uid: env[:uid], folder: folder, from: env[:from], subject: env[:subject] }
+          else
+            all_emails[env[:message_id]] = { uid: env[:uid], folder: folder, from: env[:from], subject: env[:subject] }
+          end
+        end
+      end
+    end
+    
+    duplicates
   end
 
   def fetch_sent_recipients
@@ -220,7 +247,8 @@ class EmailHandler
         from: extract_address(envelope.from&.first),
         name: extract_name(envelope.from&.first),
         to: extract_addresses(envelope.to),
-        subject: envelope.subject
+        subject: envelope.subject,
+        message_id: envelope.message_id
       }
     end
   end
