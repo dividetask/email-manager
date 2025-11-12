@@ -7,6 +7,7 @@ logs/
 bak/
 Gemfile.lock
 .*.swp
+.*.swo
 
 *.gem
 *.rbc
