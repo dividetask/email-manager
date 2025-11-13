@@ -87,13 +87,15 @@ module ManageManual
     trap('INT') { daemon.request_shutdown; exit }
     trap('TERM') { daemon.request_shutdown; exit }
 
-    @@runs = 0
+    @runs = 0
     daemon.start do
+      @runs = @runs + 1
+      p "RUN #{@runs}"
       sorter.connect
       sorter.process_folder 'INBOX'
       sorter.process_folder 'INBOX/Unsorted'
       sorter.cleanup
-      daemon.stop if ++@@runs >= 2
+      daemon.stop if @runs >= 2
     end
   end
 end
