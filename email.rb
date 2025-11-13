@@ -45,6 +45,7 @@ class EmailDaemon
       end
 
       @common_obj.log_info "Sleeping for #{@check_interval} seconds"
+      @common_obj.log_obj.flush if @common_obj.log_obj.respond_to?(:flush)
       break if @test_run_once
       sleep(@check_interval)
     end
