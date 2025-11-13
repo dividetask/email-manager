@@ -22,13 +22,13 @@ class EmailDaemon
   def stop; @running = false; end
   def request_shutdown; @common_obj.log_info "Shutdown requested..."; @shutdown_requested = true; end
 
-  def initialize(common_obj, test_run_once = false)
+  def initialize(common_obj, params = {})
   	@common_obj = common_obj
     @email_sorter = EmailSorter.new(@common_obj)
-    @check_interval = @common_obj.config_obj.check_interval || 3600
+    @check_interval = params[:overwrite_check_interval] || @common_obj.config_obj.check_interval || 3600
     @running = false
     @shutdown_requested = false
-    @test_run_once = test_run_once
+    @test_run_once = (params[:test_run_once] == true)
   end
 
   def start(&task)
@@ -58,6 +58,7 @@ class EmailSorter
   def initialize(common_obj); @common_obj = common_obj; @email_repo = EmailRepository.new(common_obj); end
   def get_responded_to_emails; @email_repo.fetch_sent_recipients; end
   def cleanup; @email_repo.disconnect; end
+  def connect; @email_repo.connect; end
   
   def get_all_addresses_sent_to
     uids = @email_repo.handler.get_uids_by_folder('Sent')
@@ -125,6 +126,7 @@ class EmailRepository
   def move_email(uid, target_folder); @handler.move_email(uid, target_folder); end
   def expunge; @handler.expunge; end
   def disconnect; @handler.disconnect; end
+  def connect; @handler.connect; end
   def delete(folder, uid); @handler.select_folder(folder); @handler.move_email(uid, 'Trash'); end
 
   def fetch_emails folder

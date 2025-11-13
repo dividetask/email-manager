@@ -14,9 +14,9 @@ if __FILE__ == $0
   trap('TERM') { daemon.request_shutdown; exit }
 
   daemon.start do
+    sorter.connect
     sorter.process_folder 'INBOX'
     sorter.process_folder 'INBOX/Unsorted'
+    sorter.cleanup
   end
-
-  sorter.cleanup
 end

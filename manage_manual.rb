@@ -77,5 +77,24 @@ module ManageManual
     email_repo.expunge
     email_repo.disconnect
   end
+
+  def self.test_deamon_1 config_path
+    common = Common.new(config_path)
+
+    daemon = EmailDaemon.new(common, {overwrite_check_interval: 10})
+    sorter = EmailSorter.new(common)
+
+    trap('INT') { daemon.request_shutdown; exit }
+    trap('TERM') { daemon.request_shutdown; exit }
+
+    @@runs = 0
+    daemon.start do
+      sorter.connect
+      sorter.process_folder 'INBOX'
+      sorter.process_folder 'INBOX/Unsorted'
+      sorter.cleanup
+      daemon.stop if ++@@runs >= 2
+    end
+  end
 end
 
