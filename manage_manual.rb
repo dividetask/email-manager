@@ -98,5 +98,88 @@ module ManageManual
       daemon.stop if @runs >= 2
     end
   end
+
+  def self.get_number(message, accepted_number_list)
+    input = nil
+    while (true)
+      print "#{message} "
+      input = gets.chomp
+      break if input == 'q'
+      input = input.to_i
+      break if accepted_number_list.include? input
+    end
+    input
+  end
+
+  def self.get_response(message, accepted_responses)
+    input = nil
+    while (true)
+      print "#{message} "
+      input = gets.chomp
+      break if input == 'q'
+      break if accepted_responses.include? input
+    end
+    input
+  end
+
+	def self.show_selected email_list, is_selected_hash
+    print "\n\n"
+    email_list.each.with_index do |env, index|
+      #print "#{index + 1}. #{'* ' if is_selected_hash[env[:from]]}#{env[:from]}\t\tsubject: '#{env[:subject][0..40]}'\n"
+      from_text = "#{index + 1}. #{'* ' if is_selected_hash[env[:from]]}#{env[:from]}"
+      print "#{from_text.ljust(50)}\tsubject: '#{env[:subject][0..40]}'\n"
+    end
+  end
+
+  def self.bulk_spam config_path
+    common_obj = Common.new(config_path)
+    handler = EmailHandler.new(common_obj)
+    folder = 'INBOX/Unsorted'
+    uids = handler.get_uids_by_folder(folder)
+    all_emails = {}
+
+    uids.each_slice(20) do |uid_batch|
+      begin
+        #system('clear')
+        envelopes = handler.fetch_envelopes(uid_batch)
+        new_emails = []
+
+        envelopes.each do |env|
+          all_emails[env[:from]] = :unsorted unless all_emails[env[:from]]
+          new_emails << env if all_emails[env[:from]] == :unsorted
+        end
+
+        is_selected_hash = {}
+        input = nil
+        while input != 'q'
+          show_selected new_emails, is_selected_hash
+          input = get_number "Select emails for spam ('q' when done): ", (1..new_emails.count).to_a
+          break if input == 'q'
+          is_selected_hash[new_emails[input - 1][:from]] = !is_selected_hash[new_emails[input - 1][:from]] if input > 0 and input <= new_emails.count
+        end
+
+        spam_uids = []
+        envelopes.each { |env| spam_uids << env[:message_id] if is_selected_hash[env[:from]] == true }
+        input = get_response "#{spam_uids.count} messages selected, Move to spam?", ['y','n']
+        break if input == 'q'
+        if input == 'y'
+          new_emails.each do |env|
+          	if is_selected_hash[env[:from]]
+              handler.move_email(env[:uid], 'Spam')
+              all_emails[env[:from]] = :spam
+              common_obj.log_info "Moving #{env[:from]}, #{env[:subject]} to Spam"
+            else
+              all_emails[env[:from]] = :skipped
+            end
+          end
+          handler.expunge
+        end
+      rescue => e
+        common_obj.error "Error fetching batch: #{e.message}"
+      end
+    end
+
+    handler.disconnect
+  end
 end
 

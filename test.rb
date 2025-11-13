@@ -15,5 +15,6 @@ if __FILE__ == $0
   #ManageManual.single_daemon_iteration(config_path)
   #ManageManual.get_duplicate_list config_path
   #ManageManual.delete_duplicates config_path
-  ManageManual.test_deamon_1 config_path
+  #ManageManual.test_deamon_1 config_path
+  ManageManual.bulk_spam config_path
 end
