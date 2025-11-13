@@ -55,7 +55,7 @@ class EmailDaemon
 end
 
 class EmailSorter
-  attr_reader :common_obj, :email_repo, :recognized_emails
+  attr_reader :common_obj, :email_repo, :recognized_emails, :spam_emails
   def initialize(common_obj); @common_obj = common_obj; @email_repo = EmailRepository.new(common_obj); end
   def get_responded_to_emails; @email_repo.fetch_sent_recipients; end
   def cleanup; @email_repo.disconnect; end
@@ -75,10 +75,25 @@ class EmailSorter
     all_recipients.flatten.map(&:downcase).uniq
   end
 
+  def get_all_addresses_in_spam
+    uids = @email_repo.handler.get_uids_by_folder('Spam')
+
+    all_recipients = []
+    uids.each_slice(100) do |uid_batch|
+      envelopes = @email_repo.handler.fetch_envelopes(uid_batch)
+      envelopes.each do |env|
+        all_recipients << env[:from] if env[:from]
+      end
+    end
+
+    all_recipients.flatten.map(&:downcase).uniq
+  end
+
   def process_folder folder, max_emails = nil
     @common_obj.log_info "Processing #{folder}..."
 
     @recognized_emails = get_all_addresses_sent_to
+    @spam_emails = get_all_addresses_in_spam
     @common_obj.log_info "Found #{@recognized_emails.length} email addresses sent to"
     
     emails = @email_repo.fetch_emails folder
@@ -110,7 +125,8 @@ class EmailSorter
   private
   
   def determine_target_folder(email_address)
-  	default_folder = (@recognized_emails.include? email_address) ? 'INBOX' : DEFAULT_FOLDER
+  	default_folder = (@recognized_emails.include? email_address) ? 'INBOX' : (@spam_emails.include? email_address) ? 'Spam' : DEFAULT_FOLDER
+
     email_record = EmailAddress.find(@common_obj.data_obj, address: email_address)
     return default_folder unless email_record
 
