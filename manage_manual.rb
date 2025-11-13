@@ -35,11 +35,11 @@ module ManageManual
     handler.disconnect
   end
 
-  def self.single_daemon_iteration config_path
+  def self.single_daemon_iteration config_path, max_emails = nil
     common_obj = Common.new(config_path)
     sorter = EmailSorter.new(common_obj)
-    sorter.process_folder 'INBOX', 300
-    sorter.process_folder 'INBOX/Unsorted', 300
+    sorter.process_folder 'INBOX', max_emails
+    sorter.process_folder 'INBOX/Unsorted', max_emails
     sorter.cleanup
   end
 

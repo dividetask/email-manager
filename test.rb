@@ -12,7 +12,7 @@ if __FILE__ == $0
   #ManageManual.add_email_recipients_to_contacts(config_path)
   #ManageManual.bulk_contacts(config_path, 'INBOX/Unsorted')
   #ManageManual.bulk_contacts(config_path, 'INBOX')
-  #ManageManual.single_daemon_iteration(config_path)
+  ManageManual.single_daemon_iteration(config_path)
   #ManageManual.get_duplicate_list config_path
-  ManageManual.delete_duplicates config_path
+  #ManageManual.delete_duplicates config_path
 end
